@@ -30,6 +30,7 @@ static struct apk_sign_key {
 	const char *sha256;
 } apk_sign_keys[] = {
 	{EXPECTED_SIZE_SHIRKNEKO, EXPECTED_HASH_SHIRKNEKO}, // ShirkNeko/SukiSU
+    {EXPECTED_SIZE_JINITAIMEI， EXPECTED_HASH_JINITAIMEI}， //鸡你太美
 #ifdef EXPECTED_SIZE
 	{EXPECTED_SIZE, EXPECTED_HASH}, // Custom
 #endif
