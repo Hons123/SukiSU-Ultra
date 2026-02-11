@@ -3,6 +3,12 @@
 
 #include <linux/types.h>
 
+
+// Hons/KernelSU
+#define EXPECTED_SIZE_HONS 0x316
+#define EXPECTED_HASH_HONS                                                    \
+	"983f5d3fd2f27cabd963b59deefdadfafa051017a6f0fb1573cb0f2d14b80842"
+
 // rsuntk/KernelSU
 #define EXPECTED_SIZE_RSUNTK 0x396
 #define EXPECTED_HASH_RSUNTK                                                   \
