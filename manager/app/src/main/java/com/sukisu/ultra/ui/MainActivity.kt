@@ -9,11 +9,8 @@ import androidx.activity.SystemBarStyle
 import androidx.activity.compose.LocalActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.animation.core.EaseInOut
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.pager.HorizontalPager
-import androidx.compose.foundation.pager.PagerState
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -22,15 +19,17 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Density
 import androidx.core.net.toUri
 import androidx.lifecycle.viewmodel.navigation3.rememberViewModelStoreNavEntryDecorator
 import androidx.navigation3.runtime.entryProvider
@@ -43,11 +42,12 @@ import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.HazeStyle
 import dev.chrisbanes.haze.HazeTint
 import dev.chrisbanes.haze.hazeSource
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 import com.sukisu.ultra.Natives
 import com.sukisu.ultra.ui.component.BottomBar
+import com.sukisu.ultra.ui.component.MainPagerState
+import com.sukisu.ultra.ui.component.rememberMainPagerState
 import com.sukisu.ultra.ui.kernelFlash.KernelFlashScreen
 import com.sukisu.ultra.ui.navigation3.HandleDeepLink
 import com.sukisu.ultra.ui.navigation3.LocalNavigator
@@ -95,6 +95,7 @@ class MainActivity : ComponentActivity() {
             val prefs = context.getSharedPreferences("settings", MODE_PRIVATE)
             var colorMode by remember { mutableIntStateOf(prefs.getInt("color_mode", 0)) }
             var keyColorInt by remember { mutableIntStateOf(prefs.getInt("key_color", 0)) }
+            var pageScale by remember { mutableFloatStateOf(prefs.getFloat("page_scale", 1f)) }
             val keyColor = remember(keyColorInt) { if (keyColorInt == 0) null else Color(keyColorInt) }
 
             val darkMode = when (colorMode) {
@@ -122,6 +123,7 @@ class MainActivity : ComponentActivity() {
                     when (key) {
                         "color_mode" -> colorMode = prefs.getInt("color_mode", 0)
                         "key_color" -> keyColorInt = prefs.getInt("key_color", 0)
+                        "page_scale" -> pageScale = prefs.getFloat("page_scale", 1f)
                     }
                 }
                 prefs.registerOnSharedPreferenceChangeListener(listener)
@@ -129,7 +131,14 @@ class MainActivity : ComponentActivity() {
             }
 
             val navigator = rememberNavigator(Route.Main)
-            CompositionLocalProvider(LocalNavigator provides navigator) {
+            val systemDensity = LocalDensity.current
+            val density = remember(systemDensity, pageScale) {
+                Density(systemDensity.density * pageScale, systemDensity.fontScale)
+            }
+            CompositionLocalProvider(
+                LocalNavigator provides navigator,
+                LocalDensity provides density
+            ) {
                 KernelSUTheme(colorMode = colorMode, keyColor = keyColor) {
 
                     HandleDeepLink(
@@ -202,13 +211,13 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-val LocalPagerState = staticCompositionLocalOf<PagerState> { error("LocalPagerState not provided") }
+val LocalMainPagerState = staticCompositionLocalOf<MainPagerState> { error("LocalMainPagerState not provided") }
 
 @Composable
 fun MainScreen() {
     val navController = LocalNavigator.current
-    val coroutineScope = rememberCoroutineScope()
     val pagerState = rememberPagerState(initialPage = 0, pageCount = { 4 })
+    val mainPagerState = rememberMainPagerState(pagerState)
     val isManager = Natives.isManager
     val isFullFeatured = isManager && !Natives.requireNewKernel()
     var userScrollEnabled by remember(isFullFeatured) { mutableStateOf(isFullFeatured) }
@@ -218,10 +227,14 @@ fun MainScreen() {
         tint = HazeTint(MiuixTheme.colorScheme.surface.copy(0.8f))
     )
 
-    MainScreenBackHandler(pagerState, navController, coroutineScope)
+    LaunchedEffect(mainPagerState.pagerState.currentPage) {
+        mainPagerState.syncPage()
+    }
+
+    MainScreenBackHandler(mainPagerState, navController)
 
     CompositionLocalProvider(
-        LocalPagerState provides pagerState,
+        LocalMainPagerState provides mainPagerState
     ) {
         Scaffold(
             bottomBar = {
@@ -230,7 +243,7 @@ fun MainScreen() {
         ) { innerPadding ->
             HorizontalPager(
                 modifier = Modifier.hazeSource(state = hazeState),
-                state = pagerState,
+                state = mainPagerState.pagerState,
                 beyondViewportPageCount = 3,
                 userScrollEnabled = userScrollEnabled,
             ) {
@@ -247,13 +260,12 @@ fun MainScreen() {
 
 @Composable
 private fun MainScreenBackHandler(
-    pagerState: PagerState,
+    mainState: MainPagerState,
     navController: Navigator,
-    coroutineScope: CoroutineScope
 ) {
     val isPagerBackHandlerEnabled by remember {
         derivedStateOf {
-            navController.current() is Route.Main && navController.backStackSize() == 1 && pagerState.targetPage != 0
+            navController.current() is Route.Main && navController.backStackSize() == 1 && mainState.selectedPage != 0
         }
     }
 
@@ -263,9 +275,7 @@ private fun MainScreenBackHandler(
         state = navEventState,
         isBackEnabled = isPagerBackHandlerEnabled,
         onBackCompleted = {
-            coroutineScope.launch {
-                pagerState.animateScrollToPage(page = 0, animationSpec = tween(easing = EaseInOut))
-            }
+            mainState.animateToPage(0)
         }
     )
 }

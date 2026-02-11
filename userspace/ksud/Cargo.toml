@@ -21,6 +21,7 @@ sha256 = "1"
 tempfile = "3"
 chrono = "0.4"
 regex-lite = "0.1"
+wait-timeout = "0.2.1"
 
 [target.'cfg(target_os = "android")'.dependencies]
 rustix = { version = "1", features = [
@@ -53,6 +54,9 @@ derive-new = "0.7"
 getopts = "0.2"
 serde = { version = "1.0", features = ["derive"] }
 notify = "6.1"
+
+[target.'cfg(all(target_os = "android", target_arch = "aarch64"))'.dependencies]
+mlua = { version = "0.11.6", features = ["lua54", "vendored"] }
 
 [profile.release]
 strip = true
