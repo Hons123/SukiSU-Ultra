@@ -210,6 +210,7 @@
     <string name="settings_floating_bottom_bar_summary">使用 Apple 风格的悬浮底栏</string>
     <string name="settings_enable_glass">液态玻璃</string>
     <string name="settings_enable_glass_summary">启用悬浮底栏的液态玻璃效果</string>
+    <string name="show_only_primary_user_apps">只显示主用户应用</string>
     <!-- Customize -->
     <string name="hook_type">钩子类型</string>
     <string name="home_susfs_version">SuSFS 版本</string>
@@ -241,9 +242,6 @@
     <string name="clear_custom_paths">清除自定义</string>
     <string name="apply_config">应用配置</string>
     <string name="config_applied">配置已应用到内核</string>
-    <!-- Personalization Settings -->
-    <string name="personalization">个性化</string>
-    <string name="personalization_summary">自定义应用外观和主题</string>
     <!-- Kernel Flash Progress Related -->
     <string name="horizon_flash_complete">刷入完成</string>
     <string name="horizon_preparing">准备中…</string>

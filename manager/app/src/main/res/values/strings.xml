@@ -215,6 +215,7 @@
     <string name="settings_floating_bottom_bar_summary">Use Apple style floating bottom bar</string>
     <string name="settings_enable_glass">Liquid glass</string>
     <string name="settings_enable_glass_summary">Enable liquid glass effect for floating bottom bar</string>
+    <string name="show_only_primary_user_apps">Show only primary user apps</string>
     <!-- Customize -->
     <string name="hook_type">Hook Type</string>
     <string name="manual_hook">Manual Hook</string>
@@ -250,9 +251,6 @@
     <string name="apply_config">Apply Configuration</string>
     <string name="config_applied">Configuration applied to kernel</string>
     <string name="mnt_detach">MNT_DETACH</string>
-    <!-- Personalization Settings -->
-    <string name="personalization">Personalization</string>
-    <string name="personalization_summary">Customize the app\'s appearance and theme</string>
     <!-- Kernel Flash Progress Related -->
     <string name="horizon_flash_complete">Flash Complete</string>
     <string name="horizon_preparing">Preparing…</string>
