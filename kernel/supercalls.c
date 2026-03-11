@@ -906,13 +906,9 @@ static const struct ksu_ioctl_cmd_map ksu_ioctl_handlers[] = {
 	KSU_IOCTL(SET_SEPOLICY, "SET_SEPOLICY", do_set_sepolicy, only_root),
 	KSU_IOCTL(CHECK_SAFEMODE, "CHECK_SAFEMODE", do_check_safemode,
 		  always_allow),
-	KSU_IOCTL(GET_ALLOW_LIST, "GET_ALLOW_LIST", do_get_allow_list,
+	KSU_IOCTL(NEW_GET_ALLOW_LIST, "NEW_GET_ALLOW_LIST", do_new_get_allow_list,
 		  manager_or_root),
-	KSU_IOCTL(GET_DENY_LIST, "GET_DENY_LIST", do_get_deny_list,
-		  manager_or_root),
-	KSU_IOCTL(KSU_IOCTL_NEW_GET_ALLOW_LIST, "NEW_GET_ALLOW_LIST", do_new_get_allow_list,
-		  manager_or_root),
-	KSU_IOCTL(KSU_IOCTL_NEW_GET_DENY_LIST, "NEW_GET_DENY_LIST", do_new_get_deny_list,
+	KSU_IOCTL(NEW_GET_DENY_LIST, "NEW_GET_DENY_LIST", do_new_get_deny_list,
 		  manager_or_root),
 	KSU_IOCTL(UID_GRANTED_ROOT, "UID_GRANTED_ROOT", do_uid_granted_root,
 		  manager_or_root),
@@ -1055,14 +1051,6 @@ int ksu_handle_sys_reboot(int magic1, int magic2, unsigned int cmd,
 			susfs_add_sus_path_loop(arg);
 			return 0;
 		}
-		if (cmd == CMD_SUSFS_SET_ANDROID_DATA_ROOT_PATH) {
-			susfs_set_i_state_on_external_dir(arg);
-			return 0;
-		}
-		if (cmd == CMD_SUSFS_SET_SDCARD_ROOT_PATH) {
-			susfs_set_i_state_on_external_dir(arg);
-			return 0;
-		}
 #endif //#ifdef CONFIG_KSU_SUSFS_SUS_PATH
 #ifdef CONFIG_KSU_SUSFS_SUS_MOUNT
 		if (cmd == CMD_SUSFS_HIDE_SUS_MNTS_FOR_NON_SU_PROCS) {
@@ -1130,7 +1118,7 @@ int ksu_handle_sys_reboot(int magic1, int magic2, unsigned int cmd,
 			susfs_show_version(arg);
 			return 0;
 		}
-		return 0;
+		return -EINVAL;
 	}
 
 	// Check if this is a request to install KSU fd
