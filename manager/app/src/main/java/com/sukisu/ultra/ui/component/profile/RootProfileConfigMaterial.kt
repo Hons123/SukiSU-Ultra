@@ -35,7 +35,6 @@ import com.sukisu.ultra.ui.util.isSepolicyValid
 @Composable
 fun RootProfileConfigMaterial(
     modifier: Modifier = Modifier,
-    fixedName: Boolean,
     enabled: Boolean = true,
     profile: Natives.Profile,
     onProfileChange: (Natives.Profile) -> Unit
@@ -183,7 +182,9 @@ private fun GroupsPanel(
             SegmentedListItem(
                 headlineContent = { Text(stringResource(R.string.profile_groups)) },
                 supportingContent = { Text(tag) },
-                onClick = if (enabled) { { showDialog.value = true } } else null
+                onClick = if (enabled) {
+                    { showDialog.value = true }
+                } else null
             )
         }
     )
@@ -236,7 +237,9 @@ private fun MountNameSpacePanel(
             SegmentedListItem(
                 headlineContent = { Text(stringResource(R.string.profile_namespace)) },
                 supportingContent = { Text(selectedOption.label) },
-                onClick = if (enabled) { { showDialog.value = true } } else null
+                onClick = if (enabled) {
+                    { showDialog.value = true }
+                } else null
             )
         }
     )
@@ -288,7 +291,9 @@ private fun CapsPanel(
             SegmentedListItem(
                 headlineContent = { Text(stringResource(R.string.profile_capabilities)) },
                 supportingContent = { Text(tag) },
-                onClick = if (enabled) { { showDialog.value = true } } else null
+                onClick = if (enabled) {
+                    { showDialog.value = true }
+                } else null
             )
         }
     )
@@ -323,7 +328,9 @@ private fun SELinuxPanel(
             SegmentedListItem(
                 headlineContent = { Text(stringResource(R.string.profile_selinux_context)) },
                 supportingContent = { Text(context.ifEmpty { "—" }) },
-                onClick = if (enabled) { { showDialog.value = true } } else null
+                onClick = if (enabled) {
+                    { showDialog.value = true }
+                } else null
             )
         }
     )

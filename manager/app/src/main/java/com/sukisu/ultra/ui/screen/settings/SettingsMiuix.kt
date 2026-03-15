@@ -31,38 +31,27 @@ import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.Update
 import androidx.compose.material.icons.rounded.UploadFile
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.nestedScroll
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.viewmodel.compose.viewModel
-import com.sukisu.ultra.Natives
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.HazeStyle
 import dev.chrisbanes.haze.HazeTint
-import dev.chrisbanes.haze.hazeEffect
 import dev.chrisbanes.haze.hazeSource
 import com.sukisu.ultra.R
 import com.sukisu.ultra.ui.UiMode
 import com.sukisu.ultra.ui.component.KsuIsValid
 import com.sukisu.ultra.ui.component.dialog.rememberLoadingDialog
-import com.sukisu.ultra.ui.component.sendlogdialog.SendLogDialogMiuix
-import com.sukisu.ultra.ui.component.uninstalldialog.UninstallDialogMiuix
-import com.sukisu.ultra.ui.navigation3.Navigator
-import com.sukisu.ultra.ui.navigation3.Route
-import com.sukisu.ultra.ui.util.getSuSFSStatus
-import com.sukisu.ultra.ui.util.rememberKpmAvailable
-import com.sukisu.ultra.ui.util.toggleLauncherIcon
-import com.sukisu.ultra.ui.viewmodel.SettingsViewModel
+import com.sukisu.ultra.ui.component.miuix.SendLogDialog
+import com.sukisu.ultra.ui.component.uninstalldialog.UninstallDialog
+import com.sukisu.ultra.ui.theme.LocalEnableBlur
+import com.sukisu.ultra.ui.util.defaultHazeEffect
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.MiuixScrollBehavior
@@ -81,32 +70,36 @@ import top.yukonga.miuix.kmp.utils.scrollEndHaptic
  */
 @Composable
 fun SettingPagerMiuix(
-    navigator: Navigator,
-    bottomInnerPadding: Dp
+    uiState: SettingsUiState,
+    actions: SettingsScreenActions,
+    bottomInnerPadding: Dp,
+    isKpmAvailable: Boolean,
+    isSusfsSupported: Boolean
 ) {
-    val viewModel = viewModel<SettingsViewModel>()
-    val uiState by viewModel.uiState.collectAsState()
-
     val scrollBehavior = MiuixScrollBehavior()
+    val enableBlur = LocalEnableBlur.current
     val hazeState = remember { HazeState() }
-    val hazeStyle = HazeStyle(
-        backgroundColor = colorScheme.surface,
-        tint = HazeTint(colorScheme.surface.copy(0.8f))
-    )
+    val hazeStyle = if (enableBlur) {
+        HazeStyle(
+            backgroundColor = colorScheme.surface,
+            tint = HazeTint(colorScheme.surface.copy(0.8f))
+        )
+    } else {
+        HazeStyle.Unspecified
+    }
+    val loadingDialog = rememberLoadingDialog()
+    val showUninstallDialog = rememberSaveable { mutableStateOf(false) }
+    val showSendLogDialog = rememberSaveable { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                modifier = if (uiState.enableBlur) {
-                    Modifier.hazeEffect(hazeState) {
-                        style = hazeStyle
-                        blurRadius = 30.dp
-                        noiseFactor = 0f
-                    }
+                modifier = if (enableBlur) {
+                    Modifier.defaultHazeEffect(hazeState, hazeStyle)
                 } else {
                     Modifier
                 },
-                color = if (uiState.enableBlur) Color.Transparent else colorScheme.surface,
+                color = if (enableBlur) Color.Transparent else colorScheme.surface,
                 title = stringResource(R.string.settings),
                 scrollBehavior = scrollBehavior
             )
@@ -114,17 +107,13 @@ fun SettingPagerMiuix(
         popupHost = { },
         contentWindowInsets = WindowInsets.systemBars.add(WindowInsets.displayCutout).only(WindowInsetsSides.Horizontal)
     ) { innerPadding ->
-        val loadingDialog = rememberLoadingDialog()
-        val showUninstallDialog = rememberSaveable { mutableStateOf(false) }
-        val showSendLogDialog = rememberSaveable { mutableStateOf(false) }
-
         LazyColumn(
             modifier = Modifier
                 .fillMaxHeight()
                 .scrollEndHaptic()
                 .overScrollVertical()
                 .nestedScroll(scrollBehavior.nestedScrollConnection)
-                .hazeSource(state = hazeState)
+                .let { if (enableBlur) it.hazeSource(state = hazeState) else it }
                 .padding(horizontal = 12.dp),
             contentPadding = innerPadding,
             overscrollEffect = null,
@@ -147,9 +136,7 @@ fun SettingPagerMiuix(
                             )
                         },
                         checked = uiState.checkUpdate,
-                        onCheckedChange = {
-                            viewModel.setCheckUpdate(it)
-                        }
+                        onCheckedChange = actions.onSetCheckUpdate
                     )
                     KsuIsValid {
                         SuperSwitch(
@@ -164,9 +151,7 @@ fun SettingPagerMiuix(
                                 )
                             },
                             checked = uiState.checkModuleUpdate,
-                            onCheckedChange = {
-                                viewModel.setCheckModuleUpdate(it)
-                            }
+                            onCheckedChange = actions.onSetCheckModuleUpdate
                         )
                     }
                 }
@@ -176,11 +161,10 @@ fun SettingPagerMiuix(
                         .padding(top = 12.dp)
                         .fillMaxWidth(),
                 ) {
-                    val uiModeItems = listOf(UiMode.Miuix.name, UiMode.Material.name)
                     SuperDropdown(
                         title = stringResource(id = R.string.settings_ui_mode),
                         summary = stringResource(id = R.string.settings_ui_mode_summary),
-                        items = uiModeItems,
+                        items = UiMode.entries.map { it.name },
                         startAction = {
                             Icon(
                                 Icons.Rounded.Dashboard,
@@ -190,27 +174,7 @@ fun SettingPagerMiuix(
                             )
                         },
                         selectedIndex = if (uiState.uiMode == UiMode.Material.value) 1 else 0,
-                        onSelectedIndexChange = { index ->
-                            viewModel.setUiMode(if (index == 0) UiMode.Miuix.value else UiMode.Material.value)
-                        }
-                    )
-                    val context = LocalContext.current
-                    SuperSwitch(
-                        title = stringResource(id = R.string.icon_switch_title),
-                        summary = stringResource(id = R.string.icon_switch_summary),
-                        startAction = {
-                            Icon(
-                                Icons.Rounded.Android,
-                                modifier = Modifier.padding(end = 6.dp),
-                                contentDescription = stringResource(id = R.string.icon_switch_title),
-                                tint = colorScheme.onBackground
-                            )
-                        },
-                        checked = uiState.alternativeIcon,
-                        onCheckedChange = {
-                            viewModel.setAlternativeIcon(it)
-                            toggleLauncherIcon(context, it)
-                        }
+                        onSelectedIndexChange = actions.onSetUiModeIndex
                     )
                     
                     SuperArrow(
@@ -224,8 +188,23 @@ fun SettingPagerMiuix(
                                 tint = colorScheme.onBackground
                             )
                         },
-                        onClick = {
-                            navigator.push(Route.ColorPalette)
+                        onClick = actions.onOpenTheme
+                    )
+                    SuperSwitch(
+                        title = stringResource(id = R.string.icon_switch_title),
+                        summary = stringResource(id = R.string.icon_switch_summary),
+                        startAction = {
+                            Icon(
+                                Icons.Rounded.Android,
+                                modifier = Modifier.padding(end = 6.dp),
+                                contentDescription = stringResource(id = R.string.icon_switch_title),
+                                tint = colorScheme.onBackground
+                            )
+                        },
+                        checked = uiState.alternativeIcon,
+                        onCheckedChange = {
+                            actions.onSetAlternativeIcon(it)
+                            actions.onToggleLauncherIcon(it)
                         }
                     )
                 }
@@ -248,9 +227,7 @@ fun SettingPagerMiuix(
                                     tint = colorScheme.onBackground
                                 )
                             },
-                            onClick = {
-                                navigator.push(Route.AppProfileTemplate)
-                            }
+                            onClick = actions.onOpenProfileTemplate
                         )
                     }
                     val toolsTitle = stringResource(id = R.string.settings_tools)
@@ -271,13 +248,13 @@ fun SettingPagerMiuix(
                                 )
                             },
                             onClick = {
-                                navigator.push(Route.Tool)
+                                actions.onOpenTools()
                             }
                         )
                     }
                 }
 
-                if (rememberKpmAvailable()) {
+                if (isKpmAvailable) {
                     Card(
                         modifier = Modifier
                             .padding(top = 12.dp)
@@ -296,15 +273,14 @@ fun SettingPagerMiuix(
                                 )
                             },
                             onClick = {
-                                navigator.push(Route.Kpm)
+                                actions.onOpenKpm()
                             }
                         )
                     }
                 }
 
                 KsuIsValid {
-                    val supported = getSuSFSStatus().equals("true", ignoreCase = true)
-                    if (supported) {
+                    if (isSusfsSupported) {
                         Card(
                             modifier = Modifier
                                 .padding(top = 12.dp)
@@ -322,9 +298,9 @@ fun SettingPagerMiuix(
                                         tint = colorScheme.onBackground
                                     )
                                 },
-                                onClick = {
-                                    navigator.push(Route.SuSFS)
-                                }
+                            onClick = {
+                                actions.onOpenSusfsConfig()
+                            }
                             )
                         }
                     }
@@ -361,9 +337,7 @@ fun SettingPagerMiuix(
                             },
                             enabled = uiState.suCompatStatus == "supported",
                             selectedIndex = uiState.suCompatMode,
-                            onSelectedIndexChange = { index ->
-                                viewModel.setSuCompatMode(index)
-                            }
+                            onSelectedIndexChange = actions.onSetSuCompatMode
                         )
 
                         val umountSummary = when (uiState.kernelUmountStatus) {
@@ -384,9 +358,7 @@ fun SettingPagerMiuix(
                             },
                             enabled = uiState.kernelUmountStatus == "supported",
                             checked = uiState.isKernelUmountEnabled,
-                            onCheckedChange = { checked ->
-                                viewModel.setKernelUmountEnabled(checked)
-                            }
+                            onCheckedChange = actions.onSetKernelUmountEnabled
                         )
 
                         SuperSwitch(
@@ -401,9 +373,7 @@ fun SettingPagerMiuix(
                                 )
                             },
                             checked = uiState.isDefaultUmountModules,
-                            onCheckedChange = {
-                                viewModel.setDefaultUmountModules(it)
-                            }
+                            onCheckedChange = actions.onSetDefaultUmountModules
                         )
 
                         SuperSwitch(
@@ -418,9 +388,7 @@ fun SettingPagerMiuix(
                                 )
                             },
                             checked = uiState.enableWebDebugging,
-                            onCheckedChange = {
-                                viewModel.setEnableWebDebugging(it)
-                            }
+                            onCheckedChange = actions.onSetEnableWebDebugging
                         )
                         SuperSwitch(
                             title = stringResource(id = R.string.settings_auto_jailbreak),
@@ -434,38 +402,34 @@ fun SettingPagerMiuix(
                                 )
                             },
                             checked = uiState.autoJailbreak,
-                            onCheckedChange = {
-                                viewModel.setAutoJailbreak(it)
-                            }
+                            onCheckedChange = actions.onSetAutoJailbreak
                         )
                     }
                 }
 
-                KsuIsValid {
-                    val lkmMode = Natives.isLkmMode
-                    if (lkmMode) {
-                        Card(
-                            modifier = Modifier
-                                .padding(top = 12.dp)
-                                .fillMaxWidth(),
-                        ) {
-                            val uninstall = stringResource(id = R.string.settings_uninstall)
-                            SuperArrow(
-                                title = uninstall,
-                                startAction = {
-                                    Icon(
-                                        Icons.Rounded.Delete,
-                                        modifier = Modifier.padding(end = 6.dp),
-                                        contentDescription = uninstall,
-                                        tint = colorScheme.onBackground,
-                                    )
-                                },
-                                onClick = {
-                                    showUninstallDialog.value = true
-                                }
-                            )
-                            UninstallDialogMiuix(showUninstallDialog, navigator)
-                        }
+                if (uiState.isLkmMode) {
+                    Card(
+                        modifier = Modifier
+                            .padding(top = 12.dp)
+                            .fillMaxWidth(),
+                    ) {
+                        val uninstall = stringResource(id = R.string.settings_uninstall)
+                        SuperArrow(
+                            title = uninstall,
+                            startAction = {
+                                Icon(
+                                    Icons.Rounded.Delete,
+                                    modifier = Modifier.padding(end = 6.dp),
+                                    contentDescription = uninstall,
+                                    tint = colorScheme.onBackground,
+                                )
+                            },
+                            onClick = { showUninstallDialog.value = true }
+                        )
+                        UninstallDialog(
+                            show = showUninstallDialog.value,
+                            onDismissRequest = { showUninstallDialog.value = false }
+                        )
                     }
                 }
 
@@ -486,7 +450,7 @@ fun SettingPagerMiuix(
                             )
                         },
                         onClick = {
-                            navigator.push(Route.Sulog)
+                            actions.onOpenSulog()
                         }
                     )
                     SuperArrow(
@@ -499,11 +463,13 @@ fun SettingPagerMiuix(
                                 tint = colorScheme.onBackground
                             )
                         },
-                        onClick = {
-                            showSendLogDialog.value = true
-                        },
+                        onClick = { showSendLogDialog.value = true },
                     )
-                    SendLogDialogMiuix(showSendLogDialog, loadingDialog)
+                    SendLogDialog(
+                        show = showSendLogDialog.value,
+                        onDismissRequest = { showSendLogDialog.value = false },
+                        loadingDialog = loadingDialog
+                    )
                     val about = stringResource(id = R.string.about)
                     SuperArrow(
                         title = about,
@@ -515,9 +481,7 @@ fun SettingPagerMiuix(
                                 tint = colorScheme.onBackground
                             )
                         },
-                        onClick = {
-                            navigator.push(Route.About)
-                        }
+                        onClick = actions.onOpenAbout
                     )
                 }
                 Spacer(Modifier.height(bottomInnerPadding))

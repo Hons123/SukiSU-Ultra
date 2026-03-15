@@ -38,7 +38,6 @@ import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -48,6 +47,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -55,9 +55,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
-import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.platform.LocalLocale
 import androidx.compose.ui.platform.UriHandler
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -67,38 +66,25 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
-import androidx.core.content.edit
-import androidx.lifecycle.viewmodel.compose.viewModel
-import androidx.navigationevent.NavigationEventInfo
-import androidx.navigationevent.compose.NavigationBackHandler
-import androidx.navigationevent.compose.rememberNavigationEventState
 import com.kyant.capsule.ContinuousRoundedRectangle
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.HazeStyle
 import dev.chrisbanes.haze.HazeTint
-import dev.chrisbanes.haze.hazeEffect
 import dev.chrisbanes.haze.hazeSource
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import com.sukisu.ultra.R
+import com.sukisu.ultra.ui.util.defaultHazeEffect
 import com.sukisu.ultra.ui.component.GithubMarkdown
 import com.sukisu.ultra.ui.component.dialog.ConfirmDialogHandle
 import com.sukisu.ultra.ui.component.dialog.rememberConfirmDialog
 import com.sukisu.ultra.ui.component.miuix.SearchBox
 import com.sukisu.ultra.ui.component.miuix.SearchPager
-import com.sukisu.ultra.ui.navigation3.LocalNavigator
-import com.sukisu.ultra.ui.navigation3.Route
-import com.sukisu.ultra.ui.screen.flash.FlashIt
 import com.sukisu.ultra.ui.theme.LocalEnableBlur
 import com.sukisu.ultra.ui.theme.isInDarkTheme
 import com.sukisu.ultra.ui.util.download
-import com.sukisu.ultra.ui.util.isNetworkAvailable
-import com.sukisu.ultra.ui.util.module.fetchModuleDetail
-import com.sukisu.ultra.ui.viewmodel.ModuleRepoViewModel
-import com.sukisu.ultra.ui.viewmodel.ModuleViewModel
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.CircularProgressIndicator
 import top.yukonga.miuix.kmp.basic.DropdownImpl
@@ -133,35 +119,20 @@ import top.yukonga.miuix.kmp.utils.PressFeedbackType
 import top.yukonga.miuix.kmp.utils.overScrollVertical
 import top.yukonga.miuix.kmp.utils.scrollEndHaptic
 import java.text.Collator
-import java.util.Locale
 
 @SuppressLint("LocalContextGetResourceValueCall")
 @Composable
 fun ModuleRepoScreenMiuix(
+    state: ModuleRepoUiState,
+    actions: ModuleRepoActions,
 ) {
-    val navigator = LocalNavigator.current
-    val viewModel = viewModel<ModuleRepoViewModel>()
-    val uiState by viewModel.uiState.collectAsState()
-    val installedVm = viewModel<ModuleViewModel>()
-    val installedUiState by installedVm.uiState.collectAsState()
-    val searchStatus = uiState.searchStatus
-    val context = LocalContext.current
-    val prefs = context.getSharedPreferences("settings", Context.MODE_PRIVATE)
+    val searchStatus = state.searchStatus
+    val platformLocale = LocalLocale.current.platformLocale
     val metaBg = colorScheme.tertiaryContainer.copy(alpha = 0.6f)
     val metaTint = colorScheme.onTertiaryContainer.copy(alpha = 0.8f)
-    val repoSortByNameState = remember { mutableStateOf(prefs.getBoolean("module_repo_sort_name", false)) }
-
-    LaunchedEffect(Unit) {
-        if (uiState.modules.isEmpty()) {
-            viewModel.refresh()
-        }
-        if (installedUiState.moduleList.isEmpty()) {
-            installedVm.fetchModuleList()
-        }
-    }
 
     LaunchedEffect(searchStatus.searchText) {
-        viewModel.updateSearchText(searchStatus.searchText)
+        actions.onSearchTextChange(searchStatus.searchText)
     }
 
     val scrollBehavior = MiuixScrollBehavior()
@@ -189,27 +160,24 @@ fun ModuleRepoScreenMiuix(
                     actions = {
                         val showTopPopup = remember { mutableStateOf(false) }
                         SuperListPopup(
-                            show = showTopPopup,
+                            show = showTopPopup.value,
                             popupPositionProvider = ListPopupDefaults.ContextMenuPositionProvider,
                             alignment = PopupPositionProvider.Align.TopEnd,
-                            onDismissRequest = { showTopPopup.value = false }
-                        ) {
-                            ListPopupColumn {
-                                DropdownImpl(
-                                    text = stringResource(R.string.module_repos_sort_name),
-                                    optionSize = 1,
-                                    isSelected = repoSortByNameState.value,
-                                    onSelectedIndexChange = {
-                                        repoSortByNameState.value = !repoSortByNameState.value
-                                        prefs.edit {
-                                            putBoolean("module_repo_sort_name", repoSortByNameState.value)
-                                        }
-                                        showTopPopup.value = false
-                                    },
-                                    index = 0
-                                )
-                            }
-                        }
+                            onDismissRequest = { showTopPopup.value = false },
+                            content = {
+                                ListPopupColumn {
+                                    DropdownImpl(
+                                        text = stringResource(R.string.module_repos_sort_name),
+                                        optionSize = 1,
+                                        isSelected = state.sortByName,
+                                        onSelectedIndexChange = {
+                                            actions.onToggleSortByName()
+                                            showTopPopup.value = false
+                                        },
+                                        index = 0
+                                    )
+                                }
+                            })
                         IconButton(
                             modifier = Modifier.padding(end = 16.dp),
                             onClick = { showTopPopup.value = true },
@@ -225,7 +193,7 @@ fun ModuleRepoScreenMiuix(
                     navigationIcon = {
                         IconButton(
                             modifier = Modifier.padding(start = 16.dp),
-                            onClick = { navigator.pop() }
+                            onClick = actions.onBack
 
                         ) {
                             val layoutDirection = LocalLayoutDirection.current
@@ -245,107 +213,104 @@ fun ModuleRepoScreenMiuix(
         },
         popupHost = {
             searchStatus.SearchPager(
-                onSearchStatusChange = viewModel::updateSearchStatus,
+                onSearchStatusChange = actions.onSearchStatusChange,
                 defaultResult = {},
                 searchBarTopPadding = dynamicTopPadding,
             ) {
-                item {
-                    Spacer(Modifier.height(6.dp))
-                }
-                val displaySearch = run {
-                    val base = uiState.searchResults
-                    val sortByName = repoSortByNameState.value
-                    val collator = Collator.getInstance(Locale.getDefault())
-                    if (!sortByName) base else base.sortedWith(compareBy(collator) { it.moduleName })
-                }
-                items(displaySearch, key = { it.moduleId }) { module ->
-                    Card(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 12.dp)
-                            .padding(bottom = 12.dp),
-                        insideMargin = PaddingValues(16.dp),
-                        showIndication = true,
-                        pressFeedbackType = PressFeedbackType.Sink,
-                        onClick = {
-                            val args = RepoModuleArg(
-                                moduleId = module.moduleId,
-                                moduleName = module.moduleName,
-                                authors = module.authors,
-                                authorsList = module.authorList.map { AuthorArg(it.name, it.link) },
-                                latestRelease = module.latestRelease,
-                                latestReleaseTime = module.latestReleaseTime,
-                                releases = emptyList()
-                            )
-                            navigator.push(Route.ModuleRepoDetail(args))
-                        }
-                    ) {
-                        Column {
-                            if (module.moduleName.isNotEmpty()) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Text(
-                                        text = module.moduleName,
-                                        fontSize = 17.sp,
-                                        fontWeight = FontWeight(550),
-                                        color = colorScheme.onSurface
-                                    )
-                                    if (module.metamodule) {
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .overScrollVertical(),
+                ) {
+                    item {
+                        Spacer(Modifier.height(6.dp))
+                    }
+                    val displaySearch = run {
+                        val base = state.searchResults
+                        val sortByName = state.sortByName
+                        val collator = Collator.getInstance(platformLocale)
+                        if (!sortByName) base else base.sortedWith(compareBy(collator) { it.moduleName })
+                    }
+                    items(displaySearch, key = { it.moduleId }) { module ->
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 12.dp)
+                                .padding(bottom = 12.dp),
+                            insideMargin = PaddingValues(16.dp),
+                            showIndication = true,
+                            pressFeedbackType = PressFeedbackType.Sink,
+                            onClick = {
+                                actions.onOpenRepoDetail(module)
+                            }
+                        ) {
+                            Column {
+                                if (module.moduleName.isNotEmpty()) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
                                         Text(
-                                            text = "META",
-                                            fontSize = 12.sp,
-                                            color = metaTint,
-                                            modifier = Modifier
-                                                .padding(start = 6.dp)
-                                                .clip(ContinuousRoundedRectangle(6.dp))
-                                                .background(metaBg)
-                                                .padding(horizontal = 6.dp, vertical = 2.dp),
-                                            fontWeight = FontWeight(750),
-                                            maxLines = 1
+                                            text = module.moduleName,
+                                            fontSize = 17.sp,
+                                            fontWeight = FontWeight(550),
+                                            color = colorScheme.onSurface
                                         )
-                                    }
-                                    Spacer(Modifier.weight(1f))
-                                    if (module.stargazerCount > 0) {
-                                        Row(verticalAlignment = Alignment.CenterVertically) {
-                                            Icon(
-                                                imageVector = MiuixIcons.TopDownloads,
-                                                contentDescription = "stars",
-                                                tint = colorScheme.onSurfaceVariantSummary,
-                                                modifier = Modifier.size(16.dp)
-                                            )
+                                        if (module.metamodule) {
                                             Text(
-                                                text = module.stargazerCount.toString(),
+                                                text = "META",
                                                 fontSize = 12.sp,
-                                                color = colorScheme.onSurfaceVariantSummary,
-                                                modifier = Modifier.padding(start = 4.dp)
+                                                color = metaTint,
+                                                modifier = Modifier
+                                                    .padding(start = 6.dp)
+                                                    .clip(ContinuousRoundedRectangle(6.dp))
+                                                    .background(metaBg)
+                                                    .padding(horizontal = 6.dp, vertical = 2.dp),
+                                                fontWeight = FontWeight(750),
+                                                maxLines = 1
                                             )
+                                        }
+                                        Spacer(Modifier.weight(1f))
+                                        if (module.stargazerCount > 0) {
+                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                Icon(
+                                                    imageVector = MiuixIcons.TopDownloads,
+                                                    contentDescription = "stars",
+                                                    tint = colorScheme.onSurfaceVariantSummary,
+                                                    modifier = Modifier.size(16.dp)
+                                                )
+                                                Text(
+                                                    text = module.stargazerCount.toString(),
+                                                    fontSize = 12.sp,
+                                                    color = colorScheme.onSurfaceVariantSummary,
+                                                    modifier = Modifier.padding(start = 4.dp)
+                                                )
+                                            }
                                         }
                                     }
                                 }
-                            }
-                            if (module.moduleId.isNotEmpty()) {
+                                if (module.moduleId.isNotEmpty()) {
+                                    Text(
+                                        text = "ID: ${module.moduleId}",
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight(550),
+                                        color = colorScheme.onSurfaceVariantSummary,
+                                    )
+                                }
                                 Text(
-                                    text = "ID: ${module.moduleId}",
+                                    text = "${stringResource(id = R.string.module_author)}: ${module.authors}",
                                     fontSize = 12.sp,
+                                    modifier = Modifier.padding(bottom = 1.dp),
                                     fontWeight = FontWeight(550),
                                     color = colorScheme.onSurfaceVariantSummary,
                                 )
-                            }
-                            Text(
-                                text = "${stringResource(id = R.string.module_author)}: ${module.authors}",
-                                fontSize = 12.sp,
-                                modifier = Modifier.padding(bottom = 1.dp),
-                                fontWeight = FontWeight(550),
-                                color = colorScheme.onSurfaceVariantSummary,
-                            )
-                            if (module.summary.isNotEmpty()) {
-                                Text(
-                                    text = module.summary,
-                                    fontSize = 14.sp,
-                                    color = colorScheme.onSurfaceVariantSummary,
-                                    modifier = Modifier.padding(top = 2.dp),
-                                    overflow = TextOverflow.Ellipsis,
-                                    maxLines = 4,
-                                )
+                                if (module.summary.isNotEmpty()) {
+                                    Text(
+                                        text = module.summary,
+                                        fontSize = 14.sp,
+                                        color = colorScheme.onSurfaceVariantSummary,
+                                        modifier = Modifier.padding(top = 2.dp),
+                                        overflow = TextOverflow.Ellipsis,
+                                        maxLines = 4,
+                                    )
+                                }
                             }
                         }
                     }
@@ -354,8 +319,8 @@ fun ModuleRepoScreenMiuix(
         },
     ) { innerPadding ->
         val layoutDirection = LocalLayoutDirection.current
-        val isLoading = uiState.modules.isEmpty()
-        val offline = !isNetworkAvailable(context)
+        val isLoading = state.modules.isEmpty()
+        val offline = state.offline
 
         if (isLoading) {
             Box(
@@ -372,7 +337,7 @@ fun ModuleRepoScreenMiuix(
                                 .padding(horizontal = 24.dp)
                                 .fillMaxWidth(),
                             text = stringResource(R.string.network_retry),
-                            onClick = { viewModel.refresh() },
+                            onClick = actions.onRefresh,
                         )
                     }
                 } else {
@@ -381,7 +346,7 @@ fun ModuleRepoScreenMiuix(
             }
         } else {
             searchStatus.SearchBox(
-                onSearchStatusChange = viewModel::updateSearchStatus,
+                onSearchStatusChange = actions.onSearchStatusChange,
                 searchBarTopPadding = dynamicTopPadding,
                 contentPadding = PaddingValues(
                     top = innerPadding.calculateTopPadding(),
@@ -399,9 +364,9 @@ fun ModuleRepoScreenMiuix(
                     stringResource(R.string.refresh_complete),
                 )
                 PullToRefresh(
-                    isRefreshing = uiState.isRefreshing,
+                    isRefreshing = state.isRefreshing,
                     pullToRefreshState = pullToRefreshState,
-                    onRefresh = { viewModel.refresh() },
+                    onRefresh = actions.onRefresh,
                     refreshTexts = refreshTexts,
                     contentPadding = PaddingValues(
                         top = innerPadding.calculateTopPadding() + boxHeight.value + 6.dp,
@@ -410,9 +375,9 @@ fun ModuleRepoScreenMiuix(
                     ),
                 ) {
                     val displayModules = run {
-                        val base = uiState.modules
-                        val sortByName = repoSortByNameState.value
-                        val collator = Collator.getInstance(Locale.getDefault())
+                        val base = state.modules
+                        val sortByName = state.sortByName
+                        val collator = Collator.getInstance(platformLocale)
                         if (!sortByName) base else base.sortedWith(compareBy(collator) { it.moduleName })
                     }
                     LazyColumn(
@@ -444,18 +409,7 @@ fun ModuleRepoScreenMiuix(
                                 insideMargin = PaddingValues(16.dp),
                                 showIndication = true,
                                 pressFeedbackType = PressFeedbackType.Sink,
-                                onClick = {
-                                    val args = RepoModuleArg(
-                                        moduleId = module.moduleId,
-                                        moduleName = module.moduleName,
-                                        authors = module.authors,
-                                        authorsList = module.authorList.map { AuthorArg(it.name, it.link) },
-                                        latestRelease = module.latestRelease,
-                                        latestReleaseTime = module.latestReleaseTime,
-                                        releases = emptyList()
-                                    )
-                                    navigator.push(Route.ModuleRepoDetail(args))
-                                }
+                                onClick = { actions.onOpenRepoDetail(module) }
                             ) {
                                 Column {
                                     if (module.moduleName.isNotEmpty()) {
@@ -598,8 +552,13 @@ private fun ReadmePage(
                     InfiniteProgressIndicator()
                 }
             }
+            var isReady by remember { mutableStateOf(false) }
+            LaunchedEffect(Unit) {
+                repeat(60) { withFrameNanos { } }
+                isReady = true
+            }
             AnimatedVisibility(
-                visible = readmeLoaded && readmeHtml != null,
+                visible = isReady && readmeLoaded && readmeHtml != null,
                 enter = expandVertically() + fadeIn(),
                 exit = shrinkVertically() + fadeOut()
             ) {
@@ -608,9 +567,7 @@ private fun ReadmePage(
                     Card(
                         modifier = Modifier.padding(horizontal = 12.dp),
                     ) {
-                        Column {
-                            GithubMarkdown(content = readmeHtml!!, isLoading)
-                        }
+                        GithubMarkdown(content = readmeHtml!!, isLoading)
                     }
                 }
             }
@@ -971,27 +928,18 @@ fun InfoPage(
 @SuppressLint("StringFormatInvalid", "DefaultLocale")
 @Composable
 fun ModuleRepoDetailScreenMiuix(
-    module: RepoModuleArg
+    state: ModuleRepoDetailUiState,
+    actions: ModuleRepoDetailActions,
 ) {
     val context = LocalContext.current
-    val navigator = LocalNavigator.current
     val enableBlur = LocalEnableBlur.current
     val actionIconTint = colorScheme.onSurface.copy(alpha = if (isInDarkTheme()) 0.7f else 0.9f)
     val secondaryContainer = colorScheme.secondaryContainer.copy(alpha = 0.8f)
-    val uriHandler = LocalUriHandler.current
+    val module = state.module
     val scope = rememberCoroutineScope()
     val confirmTitle = stringResource(R.string.module_install)
     var pendingDownload by remember { mutableStateOf<(() -> Unit)?>(null) }
     val confirmDialog = rememberConfirmDialog(onConfirm = { pendingDownload?.invoke() })
-    val onInstallModule: (Uri) -> Unit = { uri ->
-        navigator.push(Route.Flash(FlashIt.FlashModules(listOf(uri))))
-    }
-
-    var readmeHtml by remember(module.moduleId) { mutableStateOf<String?>(null) }
-    var readmeLoaded by remember(module.moduleId) { mutableStateOf(false) }
-    var detailReleases by remember(module.moduleId) { mutableStateOf<List<ReleaseArg>>(emptyList()) }
-    var webUrl by remember(module.moduleId) { mutableStateOf("https://modules.kernelsu.org/module/${module.moduleId}") }
-    var sourceUrl by remember(module.moduleId) { mutableStateOf("https://github.com/KernelSU-Modules-Repo/${module.moduleId}") }
 
     val scrollBehavior = MiuixScrollBehavior()
 
@@ -1005,19 +953,17 @@ fun ModuleRepoDetailScreenMiuix(
         topBar = {
             TopAppBar(
                 modifier = if (enableBlur) {
-                    Modifier.hazeEffect(hazeState) {
-                        style = hazeStyle
-                        blurRadius = 30.dp
-                        noiseFactor = 0f
-                    }
-                } else Modifier,
+                    Modifier.defaultHazeEffect(hazeState, hazeStyle)
+                } else {
+                    Modifier
+                },
                 color = if (enableBlur) Color.Transparent else colorScheme.surface,
                 title = module.moduleName,
                 scrollBehavior = scrollBehavior,
                 navigationIcon = {
                     IconButton(
                         modifier = Modifier.padding(start = 16.dp),
-                        onClick = { navigator.pop() }
+                        onClick = actions.onBack
                     ) {
                         val layoutDirection = LocalLayoutDirection.current
                         Icon(
@@ -1031,10 +977,10 @@ fun ModuleRepoDetailScreenMiuix(
                     }
                 },
                 actions = {
-                    if (webUrl.isNotEmpty()) {
+                    if (state.webUrl.isNotEmpty()) {
                         IconButton(
                             modifier = Modifier.padding(end = 16.dp),
-                            onClick = { uriHandler.openUri(webUrl) }
+                            onClick = actions.onOpenWebUrl
                         ) {
                             Icon(
                                 imageVector = MiuixIcons.HorizontalSplit,
@@ -1048,43 +994,12 @@ fun ModuleRepoDetailScreenMiuix(
         },
         contentWindowInsets = WindowInsets.systemBars.add(WindowInsets.displayCutout).only(WindowInsetsSides.Horizontal),
     ) { innerPadding ->
-        LaunchedEffect(module.moduleId) {
-            if (module.moduleId.isNotEmpty()) {
-                withContext(Dispatchers.IO) {
-                    runCatching {
-                        val detail = fetchModuleDetail(module.moduleId)
-                        if (detail != null) {
-                            readmeHtml = detail.readmeHtml
-                            if (detail.sourceUrl.isNotEmpty()) sourceUrl = detail.sourceUrl
-                            detailReleases = detail.releases.map { r ->
-                                ReleaseArg(
-                                    tagName = r.tagName,
-                                    name = r.name,
-                                    publishedAt = r.publishedAt,
-                                    assets = r.assets.map { a -> ReleaseAssetArg(a.name, a.downloadUrl, a.size, a.downloadCount) },
-                                    descriptionHTML = r.descriptionHTML
-                                )
-                            }
-                        } else {
-                            detailReleases = emptyList()
-                        }
-                    }.onSuccess {
-                        readmeLoaded = true
-                    }.onFailure {
-                        readmeLoaded = true
-                    }
-                }
-            } else {
-                readmeLoaded = true
-            }
-        }
         val tabs = listOf(
             stringResource(R.string.tab_readme),
             stringResource(R.string.tab_releases),
             stringResource(R.string.tab_info)
         )
         val pagerState = rememberPagerState(initialPage = 0, pageCount = { tabs.size })
-        LocalDensity.current
         val tabRowHeight by remember { mutableStateOf(40.dp) }
         var collapsedFraction by remember { mutableFloatStateOf(scrollBehavior.state.collapsedFraction) }
         LaunchedEffect(scrollBehavior.state.collapsedFraction) {
@@ -1100,11 +1015,7 @@ fun ModuleRepoDetailScreenMiuix(
                 modifier = Modifier
                     .then(
                         if (enableBlur) {
-                            Modifier.hazeEffect(hazeState) {
-                                style = hazeStyle
-                                blurRadius = 30.dp
-                                noiseFactor = 0f
-                            }
+                            Modifier.defaultHazeEffect(hazeState, hazeStyle)
                         } else Modifier.background(colorScheme.surface),
                     )
                     .zIndex(1f)
@@ -1133,18 +1044,7 @@ fun ModuleRepoDetailScreenMiuix(
             HorizontalPager(
                 state = pagerState,
                 modifier = Modifier.fillMaxSize(),
-                beyondViewportPageCount = 2,
             ) { page ->
-                run {
-                    val navEventState = rememberNavigationEventState(NavigationEventInfo.None)
-                    NavigationBackHandler(
-                        state = navEventState,
-                        isBackEnabled = pagerState.currentPage != 0,
-                        onBackCompleted = {
-                            scope.launch { pagerState.animateScrollToPage(0) }
-                        }
-                    )
-                }
                 val innerPadding = PaddingValues(
                     top = innerPadding.calculateTopPadding() + tabRowHeight + dynamicTopPadding + 6.dp,
                     start = innerPadding.calculateStartPadding(layoutDirection),
@@ -1154,15 +1054,15 @@ fun ModuleRepoDetailScreenMiuix(
 
                 when (page) {
                     0 -> ReadmePage(
-                        readmeHtml = readmeHtml,
-                        readmeLoaded = readmeLoaded,
+                        readmeHtml = state.readmeHtml,
+                        readmeLoaded = state.readmeLoaded,
                         innerPadding = innerPadding,
                         scrollBehavior = scrollBehavior,
                         hazeState = hazeState
                     )
 
                     1 -> ReleasesPage(
-                        detailReleases = detailReleases,
+                        detailReleases = state.detailReleases,
                         innerPadding = innerPadding,
                         scrollBehavior = scrollBehavior,
                         hazeState = hazeState,
@@ -1171,7 +1071,7 @@ fun ModuleRepoDetailScreenMiuix(
                         confirmTitle = confirmTitle,
                         confirmDialog = confirmDialog,
                         scope = scope,
-                        onInstallModule = onInstallModule,
+                        onInstallModule = actions.onInstallModule,
                         context = context,
                         setPendingDownload = { pendingDownload = it }
                     )
@@ -1183,8 +1083,10 @@ fun ModuleRepoDetailScreenMiuix(
                         hazeState = hazeState,
                         actionIconTint = actionIconTint,
                         secondaryContainer = secondaryContainer,
-                        uriHandler = uriHandler,
-                        sourceUrl = sourceUrl,
+                        uriHandler = object : UriHandler {
+                            override fun openUri(uri: String) = actions.onOpenUrl(uri)
+                        },
+                        sourceUrl = state.sourceUrl,
                     )
                 }
             }

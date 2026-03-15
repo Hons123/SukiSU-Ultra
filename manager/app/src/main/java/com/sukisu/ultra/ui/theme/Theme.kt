@@ -102,6 +102,7 @@ fun KernelSUTheme(
             appSettings = currentAppSettings,
             content = content
         )
+
         UiMode.Material -> MaterialKernelSUTheme(
             appSettings = currentAppSettings,
             content = content
@@ -122,8 +123,8 @@ fun isInDarkTheme(): Boolean {
 
 val LocalColorMode = staticCompositionLocalOf { 0 }
 
-val LocalEnableBlur = staticCompositionLocalOf { true }
+val LocalEnableBlur = staticCompositionLocalOf { false }
 
 val LocalEnableFloatingBottomBar = staticCompositionLocalOf { false }
 
-val LocalEnableFloatingBottomBarBlur = staticCompositionLocalOf { true }
+val LocalEnableFloatingBottomBarBlur = staticCompositionLocalOf { false }

@@ -47,7 +47,7 @@ private data class ConfirmDialogVisualsImpl(
     override val dismiss: String?,
 ) : ConfirmDialogVisuals {
     companion object {
-        val Empty: ConfirmDialogVisuals = ConfirmDialogVisualsImpl("", "", false, false, null, null)
+        val Empty: ConfirmDialogVisuals = ConfirmDialogVisualsImpl("", "", isMarkdown = false, isHtml = false, confirm = null, dismiss = null)
     }
 }
 
@@ -332,6 +332,7 @@ private fun rememberConfirmDialog(visuals: ConfirmDialogVisuals, callback: Confi
                 dismiss = { coroutineScope.launch { resultChannel.send(ConfirmResult.Canceled) } },
                 showDialog = visible
             )
+
             UiMode.Material -> ConfirmDialogMaterial(
                 handle.visuals,
                 confirm = { coroutineScope.launch { resultChannel.send(ConfirmResult.Confirmed) } },
