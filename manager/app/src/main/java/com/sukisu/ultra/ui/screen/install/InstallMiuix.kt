@@ -2,6 +2,8 @@ package com.sukisu.ultra.ui.screen.install
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -47,13 +49,13 @@ import dev.chrisbanes.haze.HazeTint
 import dev.chrisbanes.haze.hazeSource
 import com.sukisu.ultra.R
 import com.sukisu.ultra.getKernelVersion
-import com.sukisu.ultra.ui.util.defaultHazeEffect
 import com.sukisu.ultra.ui.component.dialog.rememberConfirmDialog
 import com.sukisu.ultra.ui.kernelFlash.KpmPatchOption
-import com.sukisu.ultra.ui.kernelFlash.KpmPatchSelectionDialogMiuix
-import com.sukisu.ultra.ui.kernelFlash.component.SlotSelectionDialogMiuix
+import com.sukisu.ultra.ui.kernelFlash.KpmPatchSelectionDialog
+import com.sukisu.ultra.ui.kernelFlash.component.SlotSelectionDialog
 import com.sukisu.ultra.ui.theme.LocalEnableBlur
 import com.sukisu.ultra.ui.util.LkmSelection
+import com.sukisu.ultra.ui.util.defaultHazeEffect
 import com.sukisu.ultra.ui.util.isAbDevice
 import top.yukonga.miuix.kmp.basic.BasicComponent
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
@@ -73,6 +75,8 @@ import top.yukonga.miuix.kmp.icon.basic.ArrowRight
 import top.yukonga.miuix.kmp.icon.extended.Back
 import top.yukonga.miuix.kmp.icon.extended.Close
 import top.yukonga.miuix.kmp.icon.extended.ConvertFile
+import top.yukonga.miuix.kmp.icon.extended.ExpandLess
+import top.yukonga.miuix.kmp.icon.extended.ExpandMore
 import top.yukonga.miuix.kmp.icon.extended.MoveFile
 import top.yukonga.miuix.kmp.theme.MiuixTheme.colorScheme
 import top.yukonga.miuix.kmp.utils.overScrollVertical
@@ -108,7 +112,7 @@ internal fun InstallScreenMiuix(
 
     // 槽位选择对话框
     if (uiState.showSlotSelectionDialog && isAbDevice) {
-        SlotSelectionDialogMiuix(
+        SlotSelectionDialog(
             show = true,
             onDismiss = { uiState.anyKernel3State?.onDismissSlotDialog() },
             onSlotSelected = { slot ->
@@ -119,7 +123,7 @@ internal fun InstallScreenMiuix(
 
     // KPM补丁选择对话框
     if (uiState.showKpmPatchDialog) {
-        KpmPatchSelectionDialogMiuix(
+        KpmPatchSelectionDialog(
             show = true,
             currentOption = uiState.kpmPatchOption,
             onDismiss = { uiState.anyKernel3State?.onDismissPatchDialog() },
@@ -238,6 +242,45 @@ internal fun InstallScreenMiuix(
                                 }
                             }
                         )
+                    }
+                }
+
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 12.dp),
+                ) {
+                    BasicComponent(
+                        title = stringResource(id = R.string.advanced_options),
+                        onClick = actions.onAdvancedOptionsClicked,
+                        endActions = {
+                            Icon(
+                                if (uiState.advancedOptionsShown) MiuixIcons.ExpandLess else MiuixIcons.ExpandMore,
+                                modifier = Modifier.size(16.dp),
+                                tint = colorScheme.onSurfaceVariantActions,
+                                contentDescription = stringResource(R.string.expand),
+                            )
+                        }
+                    )
+                    AnimatedVisibility(
+                        visible = uiState.advancedOptionsShown,
+                        enter = expandVertically() + fadeIn(),
+                        exit = shrinkVertically() + fadeOut()
+                    ) {
+                        Column {
+                            SuperCheckbox(
+                                title = stringResource(id = R.string.allow_shell),
+                                checked = uiState.allowShell,
+                                summary = stringResource(id = R.string.allow_shell_summary),
+                                onCheckedChange = actions.onSelectAllowShell
+                            )
+                            SuperCheckbox(
+                                title = stringResource(id = R.string.enable_adb),
+                                checked = uiState.enableAdb,
+                                summary = stringResource(id = R.string.enable_adb_summary),
+                                onCheckedChange = actions.onSelectEnableAdb
+                            )
+                        }
                     }
                 }
 
