@@ -72,9 +72,6 @@ android {
                 }
             }
         }
-        /**debug {
-            signingConfig = signingConfigs.named("Debug").get() as ApkSigningConfig
-        }**/
     }
 
     buildFeatures {
@@ -157,7 +154,6 @@ base {
 }
 
 dependencies {
-    implementation(libs.gson)
     implementation(libs.androidx.activity.compose)
 
     implementation(platform(libs.androidx.compose.bom))
